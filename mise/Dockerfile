@@ -1,16 +1,18 @@
 # Mise Home Assistant Add-on
 # Multi-stage build for frontend + backend + MongoDB
 
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 # Stage 1: Clone and build frontend
-FROM node:20-alpine AS frontend-build
+FROM node:20-slim AS frontend-build
 
 WORKDIR /app
 
-# Install git and yarn
-RUN apk add --no-cache git && \
-    corepack enable && corepack prepare yarn@1.22.22 --activate
+# Install git
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# Enable corepack for yarn
+RUN corepack enable && corepack prepare yarn@1.22.22 --activate
 
 # Clone the Mise repository
 RUN git clone --depth 1 https://github.com/Domocn/Mise.git /mise
@@ -27,21 +29,22 @@ ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 # Build the app
 RUN yarn build
 
-# Stage 2: Final Home Assistant base image
+# Stage 2: Final Home Assistant base image (Debian-based for MongoDB support)
 FROM ${BUILD_FROM}
 
 # Install required packages
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
-    py3-pip \
-    py3-wheel \
+    python3-pip \
+    python3-venv \
     nginx \
     mongodb \
     curl \
     jq \
     bash \
     git \
-    supervisor
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set up Python virtual environment
 RUN python3 -m venv /opt/venv
@@ -99,3 +102,4 @@ LABEL \
 
 # Run the startup script
 CMD ["/run.sh"]
+
