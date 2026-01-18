@@ -1,8 +1,11 @@
+# Home Assistant Add-on Build Configuration
 build_from:
   amd64: ghcr.io/home-assistant/amd64-base:3.19
   aarch64: ghcr.io/home-assistant/aarch64-base:3.19
+
 args:
   REACT_APP_BACKEND_URL: /api
+
 labels:
   org.opencontainers.image.title: "Mise"
   org.opencontainers.image.description: "Self-hosted family recipe management"
