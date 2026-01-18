@@ -53,3 +53,23 @@ LABEL io.hass.name="Mise" \
     io.hass.arch="amd64|aarch64"
 
 CMD ["/run.sh"]
+
+COPY --from=frontend-build /mise/frontend/build /app/frontend/
+COPY rootfs/etc/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY rootfs/etc/supervisor/conf.d/ /etc/supervisor/conf.d/
+COPY rootfs/run.sh /run.sh
+RUN chmod +x /run.sh
+
+WORKDIR /app/backend
+EXPOSE 3000 8001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+LABEL io.hass.name="Mise" \
+    io.hass.description="Self-hosted family recipe management and meal planning" \
+    io.hass.version="1.0.0" \
+    io.hass.type="addon" \
+    io.hass.arch="amd64|aarch64"
+
+CMD ["/run.sh"]
