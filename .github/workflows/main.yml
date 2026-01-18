@@ -58,4 +58,5 @@ jobs:
           args: |
             --${{ matrix.architecture }} \
             --target ./${{ env.ADDON_SLUG }} \
+            --image ${{ matrix.architecture }}-${{ env.ADDON_SLUG }} \
             --docker-hub ghcr.io/${{ github.repository_owner }}
