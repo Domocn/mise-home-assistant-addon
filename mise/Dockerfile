@@ -85,13 +85,17 @@ WORKDIR /app/backend
 # Expose ports
 EXPOSE 3000 8001
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
 # Labels
 LABEL \
     io.hass.name="Mise" \
     io.hass.description="Self-hosted family recipe management and meal planning" \
     io.hass.version="1.0.0" \
     io.hass.type="addon" \
-    io.hass.arch="amd64|aarch64|armv7"
+    io.hass.arch="amd64|aarch64"
 
 # Run the startup script
 CMD ["/run.sh"]

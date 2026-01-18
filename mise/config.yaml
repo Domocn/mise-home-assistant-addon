@@ -7,21 +7,17 @@ url: "https://github.com/Domocn/Mise"
 arch:
   - amd64
   - aarch64
-  - armv7
-startup: application
-boot: auto
 ingress: true
 ingress_port: 3000
 ingress_stream: true
 panel_icon: mdi:chef-hat
 panel_title: Mise
 homeassistant_api: true
-host_network: false
 init: false
 
 # Map config and data directories for persistence
 map:
-  - config:rw
+  - homeassistant_config:rw
   - share:rw
   - ssl:ro
 
@@ -84,20 +80,8 @@ schema:
 environment:
   MISE_HA_ADDON: "true"
 
-# Labels
-labels:
-  io.hass.name: "Mise"
-  io.hass.description: "Self-hosted family recipe management and meal planning"
-  io.hass.type: "addon"
-
-# Watchdog for health monitoring
-watchdog: "http://[HOST]:[PORT:3000]/"
-
 # Backup paths
 backup_exclude:
   - "*.log"
   - "__pycache__"
   - "node_modules"
-
-# Resources
-resources_limits: false
