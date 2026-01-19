@@ -67,4 +67,5 @@ jobs:
             --target ./${{ env.ADDON_SLUG }} \
             --image "${{ matrix.architecture }}-${{ env.ADDON_SLUG }}" \
             --docker-hub "${{ env.REGISTRY }}/${{ github.repository_owner }}" \
-            --addon
+            --addon \
+            --push
