@@ -67,8 +67,10 @@ COPY rootfs/etc/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY rootfs/etc/supervisor/conf.d/ /etc/supervisor/conf.d/
 COPY rootfs/usr/local/bin/wait-for-postgres.sh /usr/local/bin/wait-for-postgres.sh
 COPY rootfs/usr/local/bin/mise-env.sh /usr/local/bin/mise-env.sh
+COPY rootfs/usr/local/bin/log-wrapper.sh /usr/local/bin/log-wrapper.sh
+COPY rootfs/usr/local/bin/test-backend-startup.sh /usr/local/bin/test-backend-startup.sh
 COPY rootfs/run.sh /run.sh
-RUN chmod +x /run.sh /usr/local/bin/wait-for-postgres.sh /usr/local/bin/mise-env.sh && \
+RUN chmod +x /run.sh /usr/local/bin/*.sh && \
     chown -R postgres:postgres /data/postgres /var/run/postgresql /run/postgresql && \
     chown -R redis:redis /data/redis
 

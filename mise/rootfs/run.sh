@@ -65,6 +65,9 @@ if [ -f "$CONFIG_PATH" ]; then
     # Celery Configuration
     CELERY_CONCURRENCY=$(jq -r '.celery_concurrency // "2"' "$CONFIG_PATH")
     ENABLE_FLOWER=$(jq -r '.enable_flower_dashboard // "true"' "$CONFIG_PATH")
+
+    # Debug Mode
+    DEBUG_MODE=$(jq -r '.debug_mode // "false"' "$CONFIG_PATH")
 else
     log "No configuration file found, using defaults..."
     JWT_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
@@ -77,6 +80,19 @@ else
     REDIS_MAXMEMORY="256mb"
     CELERY_CONCURRENCY="2"
     ENABLE_FLOWER="true"
+    DEBUG_MODE="false"
+fi
+
+# Set logging level based on debug mode
+if [ "$DEBUG_MODE" = "true" ]; then
+    LOG_LEVEL="DEBUG"
+    UVICORN_LOG_LEVEL="debug"
+    CELERY_LOG_LEVEL="debug"
+    log "DEBUG MODE ENABLED - Verbose logging active"
+else
+    LOG_LEVEL="INFO"
+    UVICORN_LOG_LEVEL="info"
+    CELERY_LOG_LEVEL="info"
 fi
 
 # Get Home Assistant ingress information
@@ -116,6 +132,8 @@ export CORS_ORIGINS="*"
 export UPLOAD_DIR="/data/uploads"
 export MISE_HA_ADDON="true"
 export INGRESS_PATH="$INGRESS_PATH"
+export DEBUG_MODE="$DEBUG_MODE"
+export LOG_LEVEL="$LOG_LEVEL"
 
 # Ensure data directories exist with correct permissions
 log "Setting up data directories..."
@@ -212,6 +230,10 @@ GITHUB_CLIENT_SECRET=$GITHUB_CLIENT_SECRET
 CORS_ORIGINS=$CORS_ORIGINS
 UPLOAD_DIR=$UPLOAD_DIR
 MISE_HA_ADDON=$MISE_HA_ADDON
+DEBUG_MODE=$DEBUG_MODE
+LOG_LEVEL=$LOG_LEVEL
+UVICORN_LOG_LEVEL=$UVICORN_LOG_LEVEL
+CELERY_LOG_LEVEL=$CELERY_LOG_LEVEL
 PATH=/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EOF
 
@@ -228,6 +250,21 @@ if [ "$ENABLE_FLOWER" = "true" ]; then
 fi
 log "  - Frontend/Nginx: 0.0.0.0:3000"
 log "  - LLM Provider: $LLM_PROVIDER"
+log ""
+log "Logs are available in:"
+log "  - Home Assistant add-on logs (this output)"
+log "  - /api/debug/logs API endpoint (when debug enabled)"
+log "  - /var/log/mise/ directory (inside container)"
+
+# Show debug information if debug mode is enabled
+if [ "$DEBUG_MODE" = "true" ]; then
+    log "====== DEBUG INFO ======"
+    log "Python version: $(python3 --version)"
+    log "Uvicorn version: $(su -s /bin/bash - root -c 'source /opt/venv/bin/activate && uvicorn --version' 2>&1 || echo 'Not available')"
+    log "Environment variables written to: /etc/mise.env"
+    log "Log files location: /var/log/mise/"
+    log "======================="
+fi
 
 # Start supervisor to manage all processes
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

@@ -1,6 +1,6 @@
 # Home Assistant Add-on Configuration
 name: "Mise"
-version: "2.0.2"
+version: "2.0.8"
 slug: "mise"
 description: "Self-hosted family recipe management with PostgreSQL, Redis, and background job processing"
 url: "https://github.com/Domocn/Mise"
@@ -59,6 +59,7 @@ options:
   redis_maxmemory: "256mb"
   celery_concurrency: 2
   enable_flower_dashboard: true
+  debug_mode: false
 
 # Schema for validating options
 schema:
@@ -87,6 +88,7 @@ schema:
   redis_maxmemory: "str?"
   celery_concurrency: "int?"
   enable_flower_dashboard: "bool?"
+  debug_mode: "bool?"
 
 # Environment variables from options
 environment:
