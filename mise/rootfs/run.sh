@@ -126,6 +126,8 @@ mkdir -p /var/log/mise
 chown -R postgres:postgres /data/postgres /var/run/postgresql
 chown -R redis:redis /data/redis
 chmod 700 /data/postgres
+# Set log directory permissions so postgres and redis users can write logs
+chmod 777 /var/log/mise
 
 # Initialize PostgreSQL if not already initialized
 if [ ! -d /data/postgres/base ]; then
