@@ -46,6 +46,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         architecture: ${{ fromJson(needs.information.outputs.architectures) }}
     steps:
@@ -74,4 +75,4 @@ jobs:
             --image "${{ matrix.architecture }}-${{ env.ADDON_SLUG }}" \
             --docker-hub "${{ env.REGISTRY }}/${{ github.repository_owner }}" \
             --addon \
-            --docker-hub-check
+            --no-latest
