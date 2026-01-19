@@ -74,7 +74,7 @@ schema:
   smtp_port: "int?"
   smtp_username: "str?"
   smtp_password: "str?"
-  smtp_from_email: "email?"
+  smtp_from_email: "str?"
   enable_registration: "bool?"
   enable_oauth_google: "bool?"
   google_client_id: "str?"
