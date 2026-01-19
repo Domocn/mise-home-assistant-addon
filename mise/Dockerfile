@@ -22,7 +22,8 @@ ADD https://api.github.com/repos/Domocn/Mise/git/refs/heads/main /tmp/mise-versi
 # Clone and build frontend
 RUN git clone --depth 1 https://github.com/Domocn/Mise.git /mise
 WORKDIR /mise/frontend
-ARG REACT_APP_BACKEND_URL=/api
+# Empty string = same-origin proxy mode (nginx proxies /api/ to backend)
+ARG REACT_APP_BACKEND_URL=
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 
 # Use yarn cache mount for faster rebuilds
