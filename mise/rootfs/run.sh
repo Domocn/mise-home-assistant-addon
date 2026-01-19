@@ -12,7 +12,7 @@ log() {
     echo "[Mise] $1"
 }
 
-log "Starting Mise Home Assistant Add-on..."
+log "Starting Mise Home Assistant Add-on v2.0.0..."
 
 # Read configuration from Home Assistant options
 if [ -f "$CONFIG_PATH" ]; then
@@ -54,6 +54,17 @@ if [ -f "$CONFIG_PATH" ]; then
     GOOGLE_CLIENT_SECRET=$(jq -r '.google_client_secret // empty' "$CONFIG_PATH")
     GITHUB_CLIENT_ID=$(jq -r '.github_client_id // empty' "$CONFIG_PATH")
     GITHUB_CLIENT_SECRET=$(jq -r '.github_client_secret // empty' "$CONFIG_PATH")
+
+    # PostgreSQL Configuration
+    POSTGRES_MAX_CONNECTIONS=$(jq -r '.postgres_max_connections // "100"' "$CONFIG_PATH")
+    POSTGRES_SHARED_BUFFERS=$(jq -r '.postgres_shared_buffers // "256MB"' "$CONFIG_PATH")
+
+    # Redis Configuration
+    REDIS_MAXMEMORY=$(jq -r '.redis_maxmemory // "256mb"' "$CONFIG_PATH")
+
+    # Celery Configuration
+    CELERY_CONCURRENCY=$(jq -r '.celery_concurrency // "2"' "$CONFIG_PATH")
+    ENABLE_FLOWER=$(jq -r '.enable_flower_dashboard // "true"' "$CONFIG_PATH")
 else
     log "No configuration file found, using defaults..."
     JWT_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
@@ -61,6 +72,11 @@ else
     LLM_PROVIDER="embedded"
     EMAIL_ENABLED="false"
     ENABLE_REGISTRATION="true"
+    POSTGRES_MAX_CONNECTIONS="100"
+    POSTGRES_SHARED_BUFFERS="256MB"
+    REDIS_MAXMEMORY="256mb"
+    CELERY_CONCURRENCY="2"
+    ENABLE_FLOWER="true"
 fi
 
 # Get Home Assistant ingress information
@@ -75,8 +91,9 @@ if [ -n "$SUPERVISOR_TOKEN" ]; then
 fi
 
 # Export environment variables for the backend
-export MONGO_URL="mongodb://127.0.0.1:27017"
-export DB_NAME="mise"
+export DATABASE_URL="postgresql://mise:mise@127.0.0.1:5432/mise"
+export REDIS_URL="redis://127.0.0.1:6379"
+export REDIS_PUBSUB_ENABLED="true"
 export JWT_SECRET="$JWT_SECRET"
 export LLM_PROVIDER="$LLM_PROVIDER"
 export OLLAMA_URL="$OLLAMA_URL"
@@ -85,9 +102,9 @@ export OPENAI_API_KEY="$OPENAI_API_KEY"
 export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
 export GOOGLE_AI_API_KEY="$GOOGLE_AI_API_KEY"
 export EMAIL_ENABLED="$EMAIL_ENABLED"
-export SMTP_SERVER="$SMTP_SERVER"
+export SMTP_HOST="$SMTP_SERVER"
 export SMTP_PORT="$SMTP_PORT"
-export SMTP_USERNAME="$SMTP_USERNAME"
+export SMTP_USER="$SMTP_USERNAME"
 export SMTP_PASSWORD="$SMTP_PASSWORD"
 export SMTP_FROM_EMAIL="$SMTP_FROM_EMAIL"
 export ENABLE_REGISTRATION="$ENABLE_REGISTRATION"
@@ -102,11 +119,47 @@ export INGRESS_PATH="$INGRESS_PATH"
 
 # Ensure data directories exist with correct permissions
 log "Setting up data directories..."
-mkdir -p /data/mongodb
+mkdir -p /data/postgres
+mkdir -p /data/redis
 mkdir -p /data/uploads
 mkdir -p /var/log/mise
-chown -R root:root /data/mongodb
-chmod 755 /data/mongodb
+chown -R postgres:postgres /data/postgres /var/run/postgresql
+chown -R redis:redis /data/redis
+chmod 700 /data/postgres
+
+# Initialize PostgreSQL if not already initialized
+if [ ! -d /data/postgres/base ]; then
+    log "Initializing PostgreSQL database..."
+    su - postgres -c "/usr/lib/postgresql/15/bin/initdb -D /data/postgres"
+
+    # Configure PostgreSQL
+    cat >> /data/postgres/postgresql.conf <<EOF
+max_connections = $POSTGRES_MAX_CONNECTIONS
+shared_buffers = $POSTGRES_SHARED_BUFFERS
+listen_addresses = '127.0.0.1'
+port = 5432
+unix_socket_directories = '/var/run/postgresql'
+logging_collector = on
+log_directory = '/var/log/mise'
+log_filename = 'postgresql-%Y-%m-%d.log'
+EOF
+
+    # Start PostgreSQL temporarily to create user and database
+    su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl -D /data/postgres -l /var/log/mise/postgres.log start"
+    sleep 5
+
+    # Create user and database
+    su - postgres -c "psql -c \"CREATE USER mise WITH PASSWORD 'mise';\""
+    su - postgres -c "psql -c \"CREATE DATABASE mise OWNER mise;\""
+    su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE mise TO mise;\""
+
+    # Stop PostgreSQL (supervisor will manage it)
+    su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl -D /data/postgres stop"
+
+    log "PostgreSQL initialized successfully"
+else
+    log "PostgreSQL database already exists"
+fi
 
 # Update backend to use the data directory for uploads
 if [ -L /app/backend/uploads ]; then
@@ -125,8 +178,9 @@ fi
 
 # Write environment file for supervisor processes
 cat > /etc/mise.env << EOF
-MONGO_URL=$MONGO_URL
-DB_NAME=$DB_NAME
+DATABASE_URL=$DATABASE_URL
+REDIS_URL=$REDIS_URL
+REDIS_PUBSUB_ENABLED=$REDIS_PUBSUB_ENABLED
 JWT_SECRET=$JWT_SECRET
 LLM_PROVIDER=$LLM_PROVIDER
 OLLAMA_URL=$OLLAMA_URL
@@ -135,9 +189,9 @@ OPENAI_API_KEY=$OPENAI_API_KEY
 ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
 GOOGLE_AI_API_KEY=$GOOGLE_AI_API_KEY
 EMAIL_ENABLED=$EMAIL_ENABLED
-SMTP_SERVER=$SMTP_SERVER
+SMTP_HOST=$SMTP_HOST
 SMTP_PORT=$SMTP_PORT
-SMTP_USERNAME=$SMTP_USERNAME
+SMTP_USER=$SMTP_USER
 SMTP_PASSWORD=$SMTP_PASSWORD
 SMTP_FROM_EMAIL=$SMTP_FROM_EMAIL
 ENABLE_REGISTRATION=$ENABLE_REGISTRATION
@@ -148,14 +202,22 @@ GITHUB_CLIENT_SECRET=$GITHUB_CLIENT_SECRET
 CORS_ORIGINS=$CORS_ORIGINS
 UPLOAD_DIR=$UPLOAD_DIR
 MISE_HA_ADDON=$MISE_HA_ADDON
+PATH=/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EOF
 
 # Update supervisor config to use environment file
 sed -i '/\[program:backend\]/a environment=file:/etc/mise.env' /etc/supervisor/conf.d/supervisord.conf 2>/dev/null || true
+sed -i '/\[program:worker\]/a environment=file:/etc/mise.env' /etc/supervisor/conf.d/supervisord.conf 2>/dev/null || true
+sed -i '/\[program:flower\]/a environment=file:/etc/mise.env' /etc/supervisor/conf.d/supervisord.conf 2>/dev/null || true
 
 log "Configuration complete. Starting services..."
-log "  - MongoDB: 127.0.0.1:27017"
+log "  - PostgreSQL: 127.0.0.1:5432"
+log "  - Redis: 127.0.0.1:6379"
 log "  - Backend API: 127.0.0.1:8001"
+log "  - Celery Worker: $CELERY_CONCURRENCY workers"
+if [ "$ENABLE_FLOWER" = "true" ]; then
+    log "  - Flower Dashboard: 127.0.0.1:5555"
+fi
 log "  - Frontend/Nginx: 0.0.0.0:3000"
 log "  - LLM Provider: $LLM_PROVIDER"
 

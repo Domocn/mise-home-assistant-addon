@@ -1,8 +1,8 @@
 # Home Assistant Add-on Configuration
 name: "Mise"
-version: "1.0.0"
+version: "2.0.0"
 slug: "mise"
-description: "Self-hosted family recipe management, meal planning, and cooking assistant"
+description: "Self-hosted family recipe management with PostgreSQL, Redis, and background job processing"
 url: "https://github.com/Domocn/Mise"
 arch:
   - amd64
@@ -25,10 +25,12 @@ map:
 ports:
   3000/tcp: null
   8001/tcp: null
+  5555/tcp: null
 
 ports_description:
   3000/tcp: "Web UI (optional, use ingress instead)"
   8001/tcp: "Backend API (optional)"
+  5555/tcp: "Flower Dashboard (job monitoring, optional)"
 
 # Add-on options with defaults
 options:
@@ -52,6 +54,11 @@ options:
   enable_oauth_github: false
   github_client_id: ""
   github_client_secret: ""
+  postgres_max_connections: 100
+  postgres_shared_buffers: "256MB"
+  redis_maxmemory: "256mb"
+  celery_concurrency: 2
+  enable_flower_dashboard: true
 
 # Schema for validating options
 schema:
@@ -75,6 +82,11 @@ schema:
   enable_oauth_github: "bool?"
   github_client_id: "str?"
   github_client_secret: "str?"
+  postgres_max_connections: "int?"
+  postgres_shared_buffers: "str?"
+  redis_maxmemory: "str?"
+  celery_concurrency: "int?"
+  enable_flower_dashboard: "bool?"
 
 # Environment variables from options
 environment:
@@ -85,3 +97,5 @@ backup_exclude:
   - "*.log"
   - "__pycache__"
   - "node_modules"
+  - "*.pyc"
+  - "/data/postgres/pg_log"
