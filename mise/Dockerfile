@@ -16,6 +16,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     corepack enable && \
     corepack prepare yarn@1.22.22 --activate
 
+# Cache bust: fetch latest commit info to invalidate cache when repo updates
+ADD https://api.github.com/repos/Domocn/Mise/git/refs/heads/main /tmp/mise-version.json
+
 # Clone and build frontend
 RUN git clone --depth 1 https://github.com/Domocn/Mise.git /mise
 WORKDIR /mise/frontend
@@ -51,6 +54,9 @@ RUN python3 -m venv /opt/venv && \
         /var/log/mise /run/nginx /run/postgresql /var/run/postgresql
 
 ENV PATH="/opt/venv/bin:$PATH"
+
+# Cache bust: fetch latest commit info to invalidate cache when repo updates
+ADD https://api.github.com/repos/Domocn/Mise/git/refs/heads/main /tmp/mise-version-backend.json
 
 # Clone repo, install Python deps, and copy backend - using pip cache
 RUN --mount=type=cache,target=/root/.cache/pip \
