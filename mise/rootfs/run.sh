@@ -130,10 +130,12 @@ export GITHUB_CLIENT_ID="$GITHUB_CLIENT_ID"
 export GITHUB_CLIENT_SECRET="$GITHUB_CLIENT_SECRET"
 export CORS_ORIGINS="*"
 export UPLOAD_DIR="/data/uploads"
-export MISE_HA_ADDON="true"
+export MISE_HA_ADDON="$MISE_HA_ADDON"
 export INGRESS_PATH="$INGRESS_PATH"
 export DEBUG_MODE="$DEBUG_MODE"
 export LOG_LEVEL="$LOG_LEVEL"
+export UVICORN_LOG_LEVEL="$UVICORN_LOG_LEVEL"
+export CELERY_LOG_LEVEL="$CELERY_LOG_LEVEL"
 
 # Ensure data directories exist with correct permissions
 log "Setting up data directories..."
