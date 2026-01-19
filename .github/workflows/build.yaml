@@ -75,4 +75,5 @@ jobs:
             --image "${{ matrix.architecture }}-${{ env.ADDON_SLUG }}" \
             --docker-hub "${{ env.REGISTRY }}/${{ github.repository_owner }}" \
             --addon \
+            --docker-push \
             --no-latest
