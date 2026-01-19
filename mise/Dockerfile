@@ -8,11 +8,11 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM node:20-slim AS frontend-build
 WORKDIR /app
 
-# Install git and enable yarn in one layer
+# Install git and ca-certificates, enable yarn in one layer
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
-    apt-get install -y --no-install-recommends git && \
+    apt-get install -y --no-install-recommends git ca-certificates && \
     corepack enable && \
     corepack prepare yarn@1.22.22 --activate
 
