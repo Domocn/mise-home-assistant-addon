@@ -1,72 +1,74 @@
 # Mise Home Assistant Add-on
-# Multi-stage build for frontend + backend + PostgreSQL + Redis
+# Optimized multi-stage build for faster ARM builds
+# syntax=docker/dockerfile:1
 
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
+# Stage 1: Build frontend
 FROM node:20-slim AS frontend-build
 WORKDIR /app
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
-RUN corepack enable && corepack prepare yarn@1.22.22 --activate
+
+# Install git and enable yarn in one layer
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    corepack enable && \
+    corepack prepare yarn@1.22.22 --activate
+
+# Clone and build frontend
 RUN git clone --depth 1 https://github.com/Domocn/Mise.git /mise
 WORKDIR /mise/frontend
-RUN yarn install --frozen-lockfile || yarn install
 ARG REACT_APP_BACKEND_URL=/api
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
+
+# Use yarn cache mount for faster rebuilds
+RUN --mount=type=cache,target=/root/.yarn \
+    yarn install --frozen-lockfile || yarn install
+
 RUN yarn build
 
+# Stage 2: Main application image
 FROM ${BUILD_FROM}
 
-# Install base packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-venv nginx curl jq bash git supervisor gnupg \
-    lsb-release wget ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install PostgreSQL 15
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-    wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-keyring.gpg && \
+# Install ALL system packages in ONE layer with cache mounts
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 python3-pip python3-venv nginx curl jq bash git \
+        supervisor gnupg lsb-release wget ca-certificates redis-server && \
+    wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
+        gpg --dearmor -o /usr/share/keyrings/postgresql-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
     apt-get update && \
-    apt-get install -y postgresql-15 postgresql-client-15 && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends postgresql-15 postgresql-client-15
 
-# Install Redis
-RUN apt-get update && \
-    apt-get install -y redis-server && \
-    rm -rf /var/lib/apt/lists/*
+# Create Python venv and directories
+RUN python3 -m venv /opt/venv && \
+    mkdir -p /app/backend /app/frontend \
+        /data/postgres /data/redis /data/uploads \
+        /var/log/mise /run/nginx /run/postgresql /var/run/postgresql
 
-# Create Python virtual environment
-RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Clone Mise repository and install Python dependencies
-RUN git clone --depth 1 https://github.com/Domocn/Mise.git /tmp/mise && \
-    cp /tmp/mise/backend/requirements.txt /tmp/requirements.txt && \
-    pip install --no-cache-dir -r /tmp/requirements.txt
+# Clone repo, install Python deps, and copy backend - using pip cache
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/Domocn/Mise.git /tmp/mise && \
+    pip install --no-cache-dir -r /tmp/mise/backend/requirements.txt && \
+    cp -r /tmp/mise/backend/* /app/backend/ && \
+    rm -rf /tmp/mise
 
-# Create necessary directories
-RUN mkdir -p /app/backend /app/frontend \
-    /data/postgres /data/redis /data/uploads \
-    /var/log/mise /run/nginx /run/postgresql \
-    /var/run/postgresql
-
-# Copy backend code
-RUN cp -r /tmp/mise/backend/* /app/backend/ && rm -rf /tmp/mise
-
-# Copy frontend build
+# Copy frontend build from first stage
 COPY --from=frontend-build /mise/frontend/build /app/frontend/
 
-# Copy configuration files
+# Copy config files and set permissions
 COPY rootfs/etc/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY rootfs/etc/supervisor/conf.d/ /etc/supervisor/conf.d/
 COPY rootfs/run.sh /run.sh
-RUN chmod +x /run.sh
-
-# Set PostgreSQL permissions
-RUN chown -R postgres:postgres /data/postgres /var/run/postgresql /run/postgresql
-
-# Set Redis permissions
-RUN chown -R redis:redis /data/redis
+RUN chmod +x /run.sh && \
+    chown -R postgres:postgres /data/postgres /var/run/postgresql /run/postgresql && \
+    chown -R redis:redis /data/redis
 
 WORKDIR /app/backend
 
