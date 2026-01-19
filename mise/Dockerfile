@@ -65,8 +65,9 @@ COPY --from=frontend-build /mise/frontend/build /app/frontend/
 # Copy config files and set permissions
 COPY rootfs/etc/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY rootfs/etc/supervisor/conf.d/ /etc/supervisor/conf.d/
+COPY rootfs/usr/local/bin/wait-for-postgres.sh /usr/local/bin/wait-for-postgres.sh
 COPY rootfs/run.sh /run.sh
-RUN chmod +x /run.sh && \
+RUN chmod +x /run.sh /usr/local/bin/wait-for-postgres.sh && \
     chown -R postgres:postgres /data/postgres /var/run/postgresql /run/postgresql && \
     chown -R redis:redis /data/redis
 
