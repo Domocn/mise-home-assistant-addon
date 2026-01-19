@@ -123,11 +123,19 @@ mkdir -p /data/postgres
 mkdir -p /data/redis
 mkdir -p /data/uploads
 mkdir -p /var/log/mise
+mkdir -p /var/run/postgresql
+
+# Set log directory permissions FIRST so all services can write logs
+chmod 777 /var/log/mise
+
+# Create log files with correct ownership so postgres user can write
+touch /var/log/mise/postgres.log /var/log/mise/postgres-error.log
+chown postgres:postgres /var/log/mise/postgres.log /var/log/mise/postgres-error.log
+
+# Set data directory permissions
 chown -R postgres:postgres /data/postgres /var/run/postgresql
 chown -R redis:redis /data/redis
 chmod 700 /data/postgres
-# Set log directory permissions so postgres and redis users can write logs
-chmod 777 /var/log/mise
 
 # Initialize PostgreSQL if not already initialized
 if [ ! -d /data/postgres/base ]; then
@@ -207,10 +215,8 @@ MISE_HA_ADDON=$MISE_HA_ADDON
 PATH=/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EOF
 
-# Update supervisor config to use environment file
-sed -i '/\[program:backend\]/a environment=file:/etc/mise.env' /etc/supervisor/conf.d/supervisord.conf 2>/dev/null || true
-sed -i '/\[program:worker\]/a environment=file:/etc/mise.env' /etc/supervisor/conf.d/supervisord.conf 2>/dev/null || true
-sed -i '/\[program:flower\]/a environment=file:/etc/mise.env' /etc/supervisor/conf.d/supervisord.conf 2>/dev/null || true
+# Note: Environment variables are passed via /usr/local/bin/mise-env.sh wrapper script
+# which sources /etc/mise.env before starting each service
 
 log "Configuration complete. Starting services..."
 log "  - PostgreSQL: 127.0.0.1:5432"
