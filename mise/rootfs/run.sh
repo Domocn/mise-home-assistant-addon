@@ -99,11 +99,17 @@ fi
 INGRESS_PATH=""
 if [ -n "$SUPERVISOR_TOKEN" ]; then
     log "Running as Home Assistant add-on with Supervisor..."
-    INGRESS_ENTRY=$(curl -s -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" http://supervisor/addons/self/info | jq -r '.data.ingress_entry // empty')
+    # Fetch add-on info from supervisor
+    ADDON_INFO=$(curl -s -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" http://supervisor/addons/self/info 2>/dev/null || echo "{}")
+    INGRESS_ENTRY=$(echo "$ADDON_INFO" | jq -r '.data.ingress_entry // empty')
     if [ -n "$INGRESS_ENTRY" ]; then
         INGRESS_PATH="$INGRESS_ENTRY"
         log "Ingress path: $INGRESS_PATH"
+    else
+        log "Warning: Could not detect ingress path. Using direct access mode."
     fi
+else
+    log "Running in standalone mode (no SUPERVISOR_TOKEN)"
 fi
 
 # Export environment variables for the backend
@@ -202,8 +208,20 @@ if [ -n "$INGRESS_PATH" ]; then
     log "Configuring frontend for ingress path: $INGRESS_PATH"
     # Update index.html base tag if needed
     if [ -f /app/frontend/index.html ]; then
-        sed -i "s|<base href=\"/\"|<base href=\"${INGRESS_PATH}/\"|g" /app/frontend/index.html 2>/dev/null || true
+        # Try to update existing base tag, or add one if missing
+        if grep -q '<base href=' /app/frontend/index.html 2>/dev/null; then
+            sed -i "s|<base href=\"[^\"]*\"|<base href=\"${INGRESS_PATH}/\"|g" /app/frontend/index.html
+            log "Updated base href to: ${INGRESS_PATH}/"
+        else
+            # Add base tag after <head> if it doesn't exist
+            sed -i "s|<head>|<head>\n    <base href=\"${INGRESS_PATH}/\" />|" /app/frontend/index.html
+            log "Added base href: ${INGRESS_PATH}/"
+        fi
+    else
+        log "Warning: /app/frontend/index.html not found"
     fi
+else
+    log "No ingress path configured, using default base href"
 fi
 
 # Write environment file for supervisor processes
